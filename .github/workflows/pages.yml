@@ -1,0 +1,29 @@
+# todo-hero 웹 계정 인증 핸드오프 페이지 → GitHub Pages (ADR-S-005 PR-2).
+# 정적 사이트(index.html/app.js/config.js)를 Pages 에 배포한다. canonical 소스는
+# 메인 repo todo-hero 의 web/auth/ — 이 public repo 는 Pages 호스팅 미러.
+name: Deploy auth page
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
