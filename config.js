@@ -11,4 +11,6 @@ window.TODO_HERO_AUTH_CONFIG = {
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpicXRkaGFxd2pmYXp6bnhsemhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAwNDYzMTYsImV4cCI6MjA5NTYyMjMxNn0.SFKiVpzMcuqfLV8EnJuyd_ZEF200Ddmm0ZEIYHLiXbw",
   // 인증 완료 후 기기 앱을 포그라운드로 띄우는 딥링크(payload 없음, 트리거만). 기기는 nonce 폴링으로 완료 감지.
   APP_RETURN_URL: "todohero://auth-done",
+  // 비밀번호 재설정 이메일의 redirect_to 고정값. location 기반은 접근 경로에 따라 달라지므로 명시.
+  AUTH_PAGE_URL: "https://4sizn.github.io/todo-hero-auth/",
 };
