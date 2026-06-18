@@ -166,10 +166,12 @@
     var original = els.recoverBtn.textContent;
     els.recoverBtn.textContent = "보내는 중…";
 
-    fetch((CFG.SUPABASE_URL || "").replace(/\/+$/, "") + "/auth/v1/recover", {
+    var recoverUrl = (CFG.SUPABASE_URL || "").replace(/\/+$/, "") + "/auth/v1/recover"
+      + "?redirect_to=" + encodeURIComponent(CFG.AUTH_PAGE_URL || (location.origin + location.pathname));
+    fetch(recoverUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", "apikey": ANON_KEY },
-      body: JSON.stringify({ email: email, redirect_to: CFG.AUTH_PAGE_URL || (location.origin + location.pathname) }),
+      body: JSON.stringify({ email: email }),
     })
       .then(function () {
         // GoTrue 는 열거 방지를 위해 항상 성공 응답 → 항상 동일 안내.
