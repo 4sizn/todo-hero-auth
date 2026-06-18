@@ -128,6 +128,18 @@
       <div class="msg" id="recover-msg" role="alert"></div>
     </section>
 
+    <!-- 비밀번호 재설정 뷰 -->
+    <section id="reset-view" class="hidden">
+      <h1>새 비밀번호 설정</h1>
+      <p class="sub">새로 사용할 비밀번호를 입력하세요.</p>
+      <form id="reset-form" novalidate>
+        <label for="reset-password">새 비밀번호</label>
+        <input id="reset-password" type="password" autocomplete="new-password" placeholder="6자 이상" required />
+        <button type="submit" class="primary" id="reset-btn">비밀번호 변경</button>
+      </form>
+      <div class="msg" id="reset-msg" role="alert"></div>
+    </section>
+
     <!-- 완료 뷰 -->
     <section id="done-view" class="hidden center">
       <div class="big-ok">✓</div>

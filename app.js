@@ -18,9 +18,10 @@
   var ANON_KEY = CFG.SUPABASE_ANON_KEY || "";
   var APP_RETURN_URL = CFG.APP_RETURN_URL || "todohero://auth-done";
 
-  // --- fragment 에서 nonce/mode 파싱 후 즉시 strip ---
+  // --- fragment 에서 nonce/mode/recovery 파싱 후 즉시 strip ---
   var nonce = "";
   var mode = "login";
+  var recoveryToken = "";
   (function readAndStripFragment() {
     var hash = location.hash || "";
     if (hash.charAt(0) === "#") hash = hash.slice(1);
@@ -28,11 +29,14 @@
     nonce = (params.get("nonce") || "").trim();
     var m = (params.get("mode") || "").trim();
     if (m === "link" || m === "login" || m === "signup") mode = m;
-    // 주소창·브라우저 히스토리에서 nonce 제거(보안). pushState 아님 — 히스토리 항목 교체.
+    // Supabase recovery 이메일 콜백: type=recovery + access_token
+    if (params.get("type") === "recovery") {
+      recoveryToken = params.get("access_token") || "";
+    }
+    // 주소창·브라우저 히스토리에서 토큰 제거(보안). pushState 아님 — 히스토리 항목 교체.
     try {
       history.replaceState(null, document.title, location.pathname + location.search);
     } catch (e) {
-      // replaceState 불가 환경(sandbox/file://) 폴백: 최소한 hash 라도 직접 비워 nonce 가 안 남게.
       try { location.hash = ""; } catch (e2) { /* 무시 */ }
     }
   })();
@@ -40,13 +44,14 @@
   // --- DOM ---
   var $ = function (id) { return document.getElementById(id); };
   var els = {
-    formView: $("form-view"), recoverView: $("recover-view"), doneView: $("done-view"),
+    formView: $("form-view"), recoverView: $("recover-view"), resetView: $("reset-view"), doneView: $("done-view"),
     title: $("title"), subtitle: $("subtitle"),
     form: $("auth-form"), email: $("email"), password: $("password"), submitBtn: $("submit-btn"),
     toSignup: $("to-signup"), toLogin: $("to-login"), toRecover: $("to-recover"),
     msg: $("msg"),
     recoverForm: $("recover-form"), recoverEmail: $("recover-email"), recoverBtn: $("recover-btn"),
     backToLogin: $("back-to-login"), recoverMsg: $("recover-msg"),
+    resetForm: $("reset-form"), resetPassword: $("reset-password"), resetBtn: $("reset-btn"), resetMsg: $("reset-msg"),
     doneTitle: $("done-title"), doneSub: $("done-sub"),
   };
 
@@ -77,6 +82,7 @@
   function showView(which) {
     els.formView.className = which === "form" ? "" : "hidden";
     els.recoverView.className = which === "recover" ? "" : "hidden";
+    els.resetView.className = which === "reset" ? "" : "hidden";
     els.doneView.className = which === "done" ? "center" : "hidden";
   }
 
@@ -163,7 +169,7 @@
     fetch((CFG.SUPABASE_URL || "").replace(/\/+$/, "") + "/auth/v1/recover", {
       method: "POST",
       headers: { "Content-Type": "application/json", "apikey": ANON_KEY },
-      body: JSON.stringify({ email: email }),
+      body: JSON.stringify({ email: email, redirect_to: location.origin + location.pathname }),
     })
       .then(function () {
         // GoTrue 는 열거 방지를 위해 항상 성공 응답 → 항상 동일 안내.
@@ -175,6 +181,46 @@
       .then(function () {
         els.recoverBtn.disabled = false;
         els.recoverBtn.textContent = original;
+      });
+  });
+
+  // --- 비밀번호 재설정(recovery 토큰으로 새 비밀번호 설정) ---
+  els.resetForm.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    setMessage(els.resetMsg, "", "");
+    var password = els.resetPassword.value;
+    if (password.length < 6) { setMessage(els.resetMsg, "비밀번호는 6자 이상이어야 합니다.", "err"); return; }
+
+    els.resetBtn.disabled = true;
+    var original = els.resetBtn.textContent;
+    els.resetBtn.textContent = "변경 중…";
+
+    fetch((CFG.SUPABASE_URL || "").replace(/\/+$/, "") + "/auth/v1/user", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": ANON_KEY,
+        "Authorization": "Bearer " + recoveryToken,
+      },
+      body: JSON.stringify({ password: password }),
+    })
+      .then(function (r) { return r.json().catch(function () { return {}; }); })
+      .then(function (data) {
+        if (data && data.id) {
+          setMessage(els.resetMsg, "비밀번호가 변경되었습니다. 게임에서 새 비밀번호로 로그인해주세요.", "ok");
+          els.resetBtn.disabled = true;
+        } else {
+          setMessage(els.resetMsg, "변경에 실패했습니다. 링크가 만료되었을 수 있습니다. 비밀번호 찾기를 다시 시도해주세요.", "err");
+        }
+      })
+      .catch(function () {
+        setMessage(els.resetMsg, "네트워크 오류입니다. 다시 시도해주세요.", "err");
+      })
+      .then(function () {
+        if (!els.resetBtn.disabled) {
+          els.resetBtn.disabled = false;
+          els.resetBtn.textContent = original;
+        }
       });
   });
 
@@ -190,8 +236,12 @@
 
   // --- 초기화 ---
   applyMode(mode);
-  showView("form");
-  if (!nonce) {
-    setMessage(els.msg, "이 페이지는 게임에서 ‘계정 연결/로그인’을 누르면 자동으로 열립니다. 직접 접근한 경우 게임에서 다시 시작해주세요.", "err");
+  if (recoveryToken) {
+    showView("reset");
+  } else {
+    showView("form");
+    if (!nonce) {
+      setMessage(els.msg, "이 페이지는 게임에서 ‘계정 연결/로그인’을 누르면 자동으로 열립니다. 직접 접근한 경우 게임에서 다시 시작해주세요.", "err");
+    }
   }
 })();
