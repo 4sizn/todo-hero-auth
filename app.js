@@ -1,9 +1,11 @@
 // Todo Hero 정적 인증 핸드오프 (ADR-S-005 PR-2).
 //
 // 보안 불변식:
-//  - 토큰을 절대 다루지 않는다. 이 페이지는 email/password 와 nonce 만 서버로 보낸다.
-//    auth-handoff-submit 은 {ok} 만 반환(세션은 서버 보관 → 기기가 claim). 토큰은 이 페이지에 안 온다.
-//  - nonce 는 URL fragment(#)로 들어오며, 읽은 즉시 history.replaceState 로 주소창/히스토리에서 지운다.
+//  - 정상 흐름(link/login/signup): 토큰 없음. email/password + nonce 만 서버로 보낸다.
+//    auth-handoff-submit 은 {ok} 만 반환(세션은 서버 보관 → 기기가 claim).
+//  - recovery 흐름 예외: Supabase 이메일 링크로 access_token 이 fragment 에 도착. 읽어서 메모리에만
+//    보관하고 즉시 history.replaceState 로 URL 에서 제거. PUT /auth/v1/user 한 번만 사용 후 즉시 파기.
+//  - nonce/access_token 모두 URL fragment(#)로 들어오며, 읽은 즉시 주소창/히스토리에서 지운다.
 //  - 사용자 입력은 textContent 로만 출력(innerHTML 금지) → XSS 방지.
 (function () {
   "use strict";
@@ -37,6 +39,7 @@
     try {
       history.replaceState(null, document.title, location.pathname + location.search);
     } catch (e) {
+      // replaceState 불가 환경(sandbox/file://) 폴백: hash 직접 비워 access_token/nonce 가 안 남게.
       try { location.hash = ""; } catch (e2) { /* 무시 */ }
     }
   })();
@@ -52,6 +55,7 @@
     recoverForm: $("recover-form"), recoverEmail: $("recover-email"), recoverBtn: $("recover-btn"),
     backToLogin: $("back-to-login"), recoverMsg: $("recover-msg"),
     resetForm: $("reset-form"), resetPassword: $("reset-password"), resetBtn: $("reset-btn"), resetMsg: $("reset-msg"),
+    backToRecover: $("back-to-recover"),
     doneTitle: $("done-title"), doneSub: $("done-sub"),
   };
 
@@ -196,6 +200,7 @@
     els.resetBtn.disabled = true;
     var original = els.resetBtn.textContent;
     els.resetBtn.textContent = "변경 중…";
+    var succeeded = false;
 
     fetch((CFG.SUPABASE_URL || "").replace(/\/+$/, "") + "/auth/v1/user", {
       method: "PUT",
@@ -209,8 +214,10 @@
       .then(function (r) { return r.json().catch(function () { return {}; }); })
       .then(function (data) {
         if (data && data.id) {
+          succeeded = true;
+          recoveryToken = ""; // 즉시 파기 — 클라이언트 재사용 방지(서버도 1회 사용 후 무효화).
           setMessage(els.resetMsg, "비밀번호가 변경되었습니다. 게임에서 새 비밀번호로 로그인해주세요.", "ok");
-          els.resetBtn.disabled = true;
+          els.resetBtn.textContent = "변경 완료";
         } else {
           setMessage(els.resetMsg, "변경에 실패했습니다. 링크가 만료되었을 수 있습니다. 비밀번호 찾기를 다시 시도해주세요.", "err");
         }
@@ -219,7 +226,7 @@
         setMessage(els.resetMsg, "네트워크 오류입니다. 다시 시도해주세요.", "err");
       })
       .then(function () {
-        if (!els.resetBtn.disabled) {
+        if (!succeeded) {
           els.resetBtn.disabled = false;
           els.resetBtn.textContent = original;
         }
@@ -235,6 +242,7 @@
     showView("recover");
   });
   els.backToLogin.addEventListener("click", function () { showView("form"); });
+  els.backToRecover.addEventListener("click", function () { showView("recover"); });
 
   // --- 초기화 ---
   applyMode(mode);
